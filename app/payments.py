@@ -15,6 +15,10 @@ class ChargeIn(BaseModel):
     customer: str
 
 
+class RefundIn(BaseModel):
+    amount_paise: int | None = None  # None = refund what is left
+
+
 @router.post("/charges")
 def create_charge(body: ChargeIn) -> dict:
     if body.amount_paise <= 0:
@@ -25,13 +29,12 @@ def create_charge(body: ChargeIn) -> dict:
 
 
 @router.post("/charges/{charge_id}/refund")
-def refund(charge_id: str) -> dict:
-    """Full refund of a charge."""
+def refund(charge_id: str, body: RefundIn | None = None) -> dict:
+    """Refund all or part of a charge."""
     charge = CHARGES.get(charge_id)
     if charge is None:
         raise HTTPException(404, "no such charge")
-    if charge["refunded"]:
-        raise HTTPException(409, "already refunded")
-    charge["refunded"] = charge["amount"]
-    transfer("merchant", "customer", charge["amount"], f"refund:{charge_id}")
+    amount = (body.amount_paise if body and body.amount_paise else charge["amount"])
+    charge["refunded"] += amount
+    transfer("merchant", "customer", amount, f"refund:{charge_id}")
     return {"id": charge_id, "refunded": charge["refunded"]}
